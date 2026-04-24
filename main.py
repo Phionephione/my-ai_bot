@@ -1,29 +1,50 @@
-import praw
-import openai
 import os
-import datetime
+import requests
+import json
+from openai import OpenAI
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Setup Clients
-reddit = praw.Reddit(
-    client_id=os.getenv('REDDIT_CLIENT_ID'),
-    client_secret=os.getenv('REDDIT_CLIENT_SECRET'),
-    user_agent="ProblemSolverBot/1.0"
-)
-client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+# Initialize OpenAI
+client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 def get_problem():
-    # Scraping r/learnprogramming for "challenge" or "problem"
-    subreddit = reddit.subreddit("learnprogramming")
-    for submission in subreddit.hot(limit=5):
-        if "problem" in submission.title.lower() or "challenge" in submission.title.lower():
-            return submission.title, submission.selftext
+    print("Fetching problems from Reddit...")
+    url = "https://www.reddit.com/r/learnprogramming/hot.json"
+    # Use a custom user agent so Reddit doesn't block us
+    headers = {'User-agent': 'MyAIProblemSolver/1.0'}
+    
+    response = requests.get(url, headers=headers)
+    if response.status_code != 200:
+        print(f"Failed to fetch Reddit: {response.status_code}")
+        return None, None
+
+    data = response.json()
+    for post in data['data']['children']:
+        title = post['data']['title']
+        body = post['data']['selftext']
+        
+        # Simple filter
+        keywords = ["problem", "challenge", "how to", "help with"]
+        if any(key in title.lower() for key in keywords) and len(body) > 50:
+            print(f"Found potential problem: {title}")
+            return title, body
+            
     return None, None
 
 def generate_solution(title, body):
-    prompt = f"Solve this coding problem: '{title}'. Details: {body}. Provide Python code and a markdown explanation."
+    print("Asking AI for a solution...")
+    prompt = f"""
+    You are an expert coder. 
+    Analyze the following coding problem and provide:
+    1. A brief explanation of the solution.
+    2. The complete code implementation in a markdown block.
+    
+    Problem Title: {title}
+    Problem Details: {body}
+    """
     
     response = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -31,18 +52,32 @@ def generate_solution(title, body):
     )
     return response.choices[0].message.content
 
-# Main Logic
-title, body = get_problem()
-if title:
-    solution_text = generate_solution(title, body)
-    
-    # Save to file
-    date_str = datetime.datetime.now().strftime("%Y-%m-%d")
+def save_solution(title, content):
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    clean_title = "".join([c if c.isalnum() else "_" for c in title[:30]])
     folder = f"solutions/{date_str}"
     os.makedirs(folder, exist_ok=True)
     
-    with open(f"{folder}/solution.py", "w") as f:
-        # Simplistic extraction - assume LLM puts code in blocks
-        f.write(solution_text) 
+    filename = f"{folder}/{clean_title}.md"
     
-    print(f"Solved: {title}")
+    if os.path.exists(filename):
+        print("Solution for today already exists.")
+        return
+
+    with open(filename, "w", encoding="utf-8") as f:
+        f.write(f"# Solution: {title}\n\n")
+        f.write(f"Date: {date_str}\n\n")
+        f.write(content)
+        
+    print(f"Successfully saved to {filename}")
+
+if __name__ == "__main__":
+    if not os.getenv('OPENAI_API_KEY'):
+        print("Error: OPENAI_API_KEY not found!")
+    else:
+        title, body = get_problem()
+        if title:
+            solution = generate_solution(title, body)
+            save_solution(title, solution)
+        else:
+            print("No suitable problem found today.")
