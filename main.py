@@ -13,7 +13,6 @@ client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 def get_problem():
     print("Fetching problems from Reddit...")
     url = "https://www.reddit.com/r/learnprogramming/hot.json"
-    # Use a custom user agent so Reddit doesn't block us
     headers = {'User-agent': 'MyAIProblemSolver/1.0'}
     
     response = requests.get(url, headers=headers)
@@ -26,7 +25,6 @@ def get_problem():
         title = post['data']['title']
         body = post['data']['selftext']
         
-        # Simple filter
         keywords = ["problem", "challenge", "how to", "help with"]
         if any(key in title.lower() for key in keywords) and len(body) > 50:
             print(f"Found potential problem: {title}")
