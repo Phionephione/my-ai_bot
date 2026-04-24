@@ -1,8 +1,8 @@
 name: Daily Problem Solver
 on:
   schedule:
-    - cron: '0 0 * * *' # Runs at midnight every day
-  workflow_dispatch: # Allows you to run it manually for testing
+    - cron: '0 0 * * *'
+  workflow_dispatch: 
 
 jobs:
   solve:
@@ -14,12 +14,10 @@ jobs:
         with: {python-version: '3.9'}
       
       - name: Install dependencies
-        run: pip install praw openai python-dotenv
+        run: pip install requests openai python-dotenv
         
       - name: Run Solver
         env:
-          REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
-          REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: python main.py
         
@@ -28,5 +26,6 @@ jobs:
           git config --global user.name "Bot"
           git config --global user.email "bot@users.noreply.github.com"
           git add .
-          git commit -m "Add daily solution $(date +'%Y-%m-%d')"
+          # Only commit if there are changes
+          git commit -m "Add daily solution $(date +'%Y-%m-%d')" || echo "No changes to commit"
           git push
